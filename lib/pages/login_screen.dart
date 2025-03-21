@@ -1,15 +1,71 @@
+import 'dart:convert';
+import 'package:front/config.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
+import 'package:front/pages/dashboard.dart';
 import 'package:front/pages/forgot_password_screen.dart';
 import 'package:front/pages/register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
-
+ 
   @override
   _LoginScreenState createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  TextEditingController emailController = TextEditingController();
+  TextEditingController passwordController = TextEditingController();
+  bool _isNotValidate = false;
+  late SharedPreferences prefs;
+  @override
+  void initState() {
+    
+    super.initState();
+    initSharedPref();
+  }
+
+  void initSharedPref() async{
+    prefs = await SharedPreferences.getInstance();
+
+  }
+
+
+
+
+  void loginUser() async{
+    if(emailController.text.isNotEmpty && passwordController.text.isNotEmpty ){
+      var reqBody = {
+        "email" : emailController.text,
+        "password":passwordController.text
+      };
+      var response=await http.post(Uri.parse(login),
+      headers : {
+        "Content-Type":"application/json"
+      },
+      body : jsonEncode(reqBody)
+      );
+      var jsonResponse = jsonDecode(response.body);
+      if(jsonResponse['status']){
+        var myToken = jsonResponse['token'];
+        prefs.setString ('token',myToken);
+        Navigator.push(context,MaterialPageRoute(builder: (context)=>Dashboard(token: myToken)));
+
+
+      }else{
+        print('Something went wrong');
+
+      }
+    }
+
+  }
+
+
+
+
+
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -71,7 +127,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
+                    controller: emailController,
                     decoration: InputDecoration(
+                      errorStyle: TextStyle(color: Colors.red),
+                      errorText: _isNotValidate && emailController.text.isEmpty
+                          ? "Username is required"
+                          : null,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
@@ -99,8 +160,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
+                    controller: passwordController,
                     obscureText: true,
                     decoration: InputDecoration(
+                      errorStyle: TextStyle(color: Colors.red),
+                      errorText: _isNotValidate && passwordController.text.isEmpty
+                          ? "Username is required"
+                          : null,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
@@ -122,7 +188,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     height: 50,
                     width: MediaQuery.of(context).size.width,
                     child: ElevatedButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        loginUser();
+
+
+
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color.fromARGB(255, 255, 216, 97),
                         shape: RoundedRectangleBorder(
@@ -145,7 +216,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (context) => const RegisterScreen(),
+                            builder: (context) =>  RegisterScreen(),
                           ),
                         );
                       },
