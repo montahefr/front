@@ -16,6 +16,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   TextEditingController rewritepasswordController = TextEditingController();
   bool _isNotValidate = false;
 
+  // Function to validate email format
+  bool isValidEmail(String email) {
+    final RegExp emailRegex = RegExp(
+      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+    );
+    return emailRegex.hasMatch(email);
+  }
+
   void registerUser() async {
     if (usernameController.text.isEmpty ||
         emailController.text.isEmpty ||
@@ -26,6 +34,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('All fields are required')),
+      );
+      return;
+    }
+
+    // Email format validation
+    if (!isValidEmail(emailController.text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please enter a valid email address')),
       );
       return;
     }
@@ -56,7 +72,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (response.statusCode == 200 && jsonResponse['status']) {
         // Registration successful
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Registration successful!')),
+          SnackBar(content: Text('Successful Registration!')),
         );
         Navigator.push(
           context,
@@ -174,7 +190,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       errorStyle: TextStyle(color: Colors.red),
                       errorText: _isNotValidate && emailController.text.isEmpty
                           ? "Email is required"
-                          : null,
+                          : !isValidEmail(emailController.text) && emailController.text.isNotEmpty
+                              ? "Please enter a valid email"
+                              : null,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
