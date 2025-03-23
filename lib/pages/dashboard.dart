@@ -5,6 +5,23 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:front/config.dart';
 import 'package:http/http.dart' as http;
 import 'package:jwt_decoder/jwt_decoder.dart';
+import 'login_screen.dart'; // Import your login screen
+
+// Custom FloatingActionButtonLocation to move the button higher
+class CustomFloatingActionButtonLocation extends FloatingActionButtonLocation {
+  final double offsetY; // Vertical offset to move the button higher
+
+  CustomFloatingActionButtonLocation({this.offsetY = 0.0});
+
+  @override
+  Offset getOffset(ScaffoldPrelayoutGeometry scaffoldGeometry) {
+    // Get the default endFloat position
+    final Offset endFloatOffset = FloatingActionButtonLocation.endFloat.getOffset(scaffoldGeometry);
+    
+    // Adjust the Y position by subtracting the offsetY
+    return Offset(endFloatOffset.dx, endFloatOffset.dy - offsetY);
+  }
+}
 
 class Dashboard extends StatefulWidget {
   final token;
@@ -53,40 +70,71 @@ class _DashboardState extends State<Dashboard> {
   }
 
   Future<void> getHiveList(String userId) async {
-  try {
-    // Include userId as a query parameter in the URL
-    final String endpoint = '$getHiVeList?userId=$userId';
-    
-    print("Fetching hives for userId: $userId");
-    print("Calling API: $endpoint");
-    
-    var response = await http.get(
-      Uri.parse(endpoint),
-      headers: {"Content-Type": "application/json"},
-    );
-    
-    print("Status code: ${response.statusCode}");
-    print("Response body: ${response.body.substring(0, min(100, response.body.length))}");
-    
-    if (response.statusCode == 200) {
-      var jsonResponse = jsonDecode(response.body);
-      setState(() {
-        items = jsonResponse['success'] ?? [];
-      });
-    } else {
-      print("Server error: ${response.statusCode}");
-      print("Response body: ${response.body}");
+    try {
+      // Include userId as a query parameter in the URL
+      final String endpoint = '$getHiVeList?userId=$userId';
+      
+      print("Fetching hives for userId: $userId");
+      print("Calling API: $endpoint");
+      
+      var response = await http.get(
+        Uri.parse(endpoint),
+        headers: {"Content-Type": "application/json"},
+      );
+      
+      print("Status code: ${response.statusCode}");
+      print("Response body: ${response.body.substring(0, min(100, response.body.length))}");
+      
+      if (response.statusCode == 200) {
+        var jsonResponse = jsonDecode(response.body);
+        setState(() {
+          items = jsonResponse['success'] ?? [];
+        });
+      } else {
+        print("Server error: ${response.statusCode}");
+        print("Response body: ${response.body}");
+        setState(() {
+          items = [];
+        });
+      }
+    } catch (e) {
+      print("Error fetching hive list: $e");
       setState(() {
         items = [];
       });
     }
-  } catch (e) {
-    print("Error fetching hive list: $e");
-    setState(() {
-      items = [];
-    });
   }
-}
+  
+  void deleteItem(String id) async {
+    try {
+      var regBody = {
+        "id": id,
+      };
+
+      var response = await http.post(
+        Uri.parse(deleteHive),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(regBody),
+      );
+
+      print("Status code: ${response.statusCode}");
+      print("Response body: ${response.body}");
+
+      if (response.statusCode == 200) {
+        var jsonResponse = jsonDecode(response.body);
+        if (jsonResponse['status']) {
+          print("Hive deleted successfully");
+          getHiveList(userId); // Refresh the list
+        } else {
+          print("Failed to delete hive: ${jsonResponse['message']}");
+        }
+      } else {
+        print("Server error: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Exception: $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -146,9 +194,9 @@ class _DashboardState extends State<Dashboard> {
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: items == null
-                ? Center(child: CircularProgressIndicator()) // Show loading indicator
-    : items!.isEmpty
-        ? Center(child: Text("No Hives found."))
+                    ? Center(child: CircularProgressIndicator()) // Show loading indicator
+                    : items!.isEmpty
+                        ? Center(child: Text("No Hives found."))
                         : ListView.builder(
                             itemCount: items!.length,
                             itemBuilder: (context, int index) {
@@ -165,6 +213,7 @@ class _DashboardState extends State<Dashboard> {
                                       label: 'Delete',
                                       onPressed: (BuildContext context) {
                                         print('${items![index]['_id']}');
+                                        deleteItem('${items![index]['_id']}');
                                       },
                                     ),
                                   ],
@@ -214,6 +263,7 @@ class _DashboardState extends State<Dashboard> {
                 IconButton(
                   onPressed: () {
                     // Add functionality for Home
+                    
                   },
                   icon: Icon(
                     Icons.home,
@@ -233,7 +283,11 @@ class _DashboardState extends State<Dashboard> {
                 ),
                 IconButton(
                   onPressed: () {
-                    // Add functionality for Logout
+                    // Navigate to the login screen
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (context) => LoginScreen()),
+                    );
                   },
                   icon: Icon(
                     Icons.logout,
@@ -252,6 +306,7 @@ class _DashboardState extends State<Dashboard> {
         child: Icon(Icons.add, color: Colors.white),
         tooltip: 'Add Hive',
       ),
+      floatingActionButtonLocation: CustomFloatingActionButtonLocation(offsetY: 90.0), // Adjust the offsetY to move the button higher
     );
   }
 

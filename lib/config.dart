@@ -3,3 +3,4 @@ final registration = url + "registration";
 final login = url + "login";
 final addhive = url + "storeHive";
 final getHiVeList = url +'getUserHiveList';
+final deleteHive = url + 'deleteHive';
