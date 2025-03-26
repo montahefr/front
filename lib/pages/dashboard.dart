@@ -3,9 +3,10 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:front/config.dart';
+import 'package:front/pages/acceuil.dart';
 import 'package:http/http.dart' as http;
 import 'package:jwt_decoder/jwt_decoder.dart';
-import 'login_screen.dart'; // Import your login screen
+
 
 // Custom FloatingActionButtonLocation to move the button higher
 class CustomFloatingActionButtonLocation extends FloatingActionButtonLocation {
@@ -263,7 +264,6 @@ class _DashboardState extends State<Dashboard> {
                 IconButton(
                   onPressed: () {
                     // Add functionality for Home
-                    
                   },
                   icon: Icon(
                     Icons.home,
@@ -282,13 +282,7 @@ class _DashboardState extends State<Dashboard> {
                   ),
                 ),
                 IconButton(
-                  onPressed: () {
-                    // Navigate to the login screen
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (context) => LoginScreen()),
-                    );
-                  },
+                  onPressed: () => _displayTextInputDialogLogOut(context),
                   icon: Icon(
                     Icons.logout,
                     size: 30,
@@ -302,11 +296,11 @@ class _DashboardState extends State<Dashboard> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _displayTextInputDialog(context),
-        backgroundColor: Colors.amber,
+        backgroundColor: const Color.fromARGB(255, 255, 216, 97),
         child: Icon(Icons.add, color: Colors.white),
         tooltip: 'Add Hive',
       ),
-      floatingActionButtonLocation: CustomFloatingActionButtonLocation(offsetY: 90.0), // Adjust the offsetY to move the button higher
+      floatingActionButtonLocation: CustomFloatingActionButtonLocation(offsetY: 90.0),
     );
   }
 
@@ -344,13 +338,61 @@ class _DashboardState extends State<Dashboard> {
                   addHive();
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.amber,
+                  backgroundColor: const Color.fromARGB(255, 255, 216, 97),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
                 child: Text(
                   "Add",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    ).then((_) {
+      hiveTitleController.clear();
+    });
+  }
+
+  Future<void> _displayTextInputDialogLogOut(BuildContext context) async {
+    return showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(
+            'ARE YOU SURE ?',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.amber,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => Acceuil()),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color.fromARGB(255, 255, 216, 97),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: Text(
+                  "LOG OUT",
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,

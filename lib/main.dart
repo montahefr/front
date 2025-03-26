@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:front/pages/login_screen.dart';
+import 'package:front/pages/acceuil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:front/pages/dashboard.dart';
@@ -23,7 +23,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false, 
-       home: (token != null && JwtDecoder.isExpired(token) == false )?Dashboard(token: token):LoginScreen()
+       home: (token != null && JwtDecoder.isExpired(token) == false )?Dashboard(token: token):Acceuil()
     );
   }
 }

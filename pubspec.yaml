@@ -60,6 +60,7 @@ flutter:
   assets:
     - assets/images/logo.png
     - assets/images/background.jpg
+    - assets/images/background1.jpg
 
   # For details regarding adding assets from package dependencies, see
   # https://flutter.dev/to/asset-from-package
