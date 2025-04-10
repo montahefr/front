@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:front/config.dart';
 import 'package:front/pages/acceuil.dart';
+import 'package:front/pages/hive_details_screen.dart';
 import 'package:http/http.dart' as http;
 import 'package:jwt_decoder/jwt_decoder.dart';
 
@@ -226,6 +227,19 @@ class _DashboardState extends State<Dashboard> {
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: ListTile(
+                                    onTap: () {
+                                      // Navigate to HiveDetails page when tapped
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => HiveDetailScreen(
+                                            hiveId: items![index]['_id'],
+                                            hiveTitle: items![index]['title'],
+                                            token: widget.token,
+                                          ),
+                                        ),
+                                      );
+                                    },
                                     title: Text('${items![index]['title']}',
                                       style: TextStyle(
                                         fontSize: 16,
@@ -324,7 +338,7 @@ class _DashboardState extends State<Dashboard> {
                 controller: hiveTitleController,
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: const Color.fromARGB(255, 255, 255, 255).withOpacity(0.1),
+                  fillColor: const Color.fromARGB(255, 255, 255, 255),
                   hintText: "Enter a title",
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -409,3 +423,4 @@ class _DashboardState extends State<Dashboard> {
     });
   }
 }
+
