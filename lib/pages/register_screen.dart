@@ -24,6 +24,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return emailRegex.hasMatch(email);
   }
 
+  // Function to validate password strength (min 6 characters)
+  bool isPasswordStrong(String password) {
+    return password.length >= 6;
+  }
+
   void registerUser() async {
     if (usernameController.text.isEmpty ||
         emailController.text.isEmpty ||
@@ -42,6 +47,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!isValidEmail(emailController.text)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Please enter a valid email address')),
+      );
+      return;
+    }
+
+    // Password strength validation
+    if (!isPasswordStrong(passwordController.text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Password must be at least 6 characters long')),
       );
       return;
     }
@@ -226,14 +239,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       errorStyle: TextStyle(color: Colors.red),
                       errorText: _isNotValidate && passwordController.text.isEmpty
                           ? "Password is required"
-                          : null,
+                          : !isPasswordStrong(passwordController.text) && passwordController.text.isNotEmpty
+                              ? "Password must be at least 6 characters"
+                              : null,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
                       ),
                       filled: true,
                       fillColor: Colors.grey.withOpacity(0.1),
-                      hintText: 'Enter your password',
+                      hintText: 'Enter your password (min 6 characters)',
                       hintStyle: TextStyle(
                         color: Colors.grey.withOpacity(0.8),
                       ),
