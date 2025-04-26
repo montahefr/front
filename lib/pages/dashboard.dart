@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -7,27 +8,24 @@ import 'package:front/pages/acceuil.dart';
 import 'package:front/pages/hive_details_screen.dart';
 import 'package:http/http.dart' as http;
 import 'package:jwt_decoder/jwt_decoder.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:flutter/services.dart';
 
-
-// Custom FloatingActionButtonLocation to move the button higher
 class CustomFloatingActionButtonLocation extends FloatingActionButtonLocation {
-  final double offsetY; // Vertical offset to move the button higher
+  final double offsetY;
 
-  CustomFloatingActionButtonLocation({this.offsetY = 0.0});
+  const CustomFloatingActionButtonLocation({this.offsetY = 0.0});
 
   @override
   Offset getOffset(ScaffoldPrelayoutGeometry scaffoldGeometry) {
-    // Get the default endFloat position
     final Offset endFloatOffset = FloatingActionButtonLocation.endFloat.getOffset(scaffoldGeometry);
-    
-    // Adjust the Y position by subtracting the offsetY
     return Offset(endFloatOffset.dx, endFloatOffset.dy - offsetY);
   }
 }
 
 class Dashboard extends StatefulWidget {
-  final token;
-  const Dashboard({@required this.token, Key? key}) : super(key: key);
+  final String token;
+  const Dashboard({required this.token, Key? key}) : super(key: key);
 
   @override
   State<Dashboard> createState() => _DashboardState();
@@ -35,106 +33,308 @@ class Dashboard extends StatefulWidget {
 
 class _DashboardState extends State<Dashboard> {
   late String userId;
-  TextEditingController hiveTitleController = TextEditingController();
-  List? items;
+  late TextEditingController hiveTitleController;
+  List<dynamic>? items;
+  bool isLoading = false;
+  bool isDeleting = false;
+  final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
 
   @override
   void initState() {
     super.initState();
-    Map<String, dynamic> jwtDecodedToken = JwtDecoder.decode(widget.token);
-    userId = jwtDecodedToken['_id'];
-    getHiveList(userId);
+    hiveTitleController = TextEditingController();
+    final Map<String, dynamic> jwtDecodedToken = JwtDecoder.decode(widget.token);
+    userId = jwtDecodedToken['_id'] ?? '';
+    _loadHives();
   }
 
-  void addHive() async {
-    if (hiveTitleController.text.isNotEmpty) {
-      var regBody = {
-        "userId": userId,
-        "title": hiveTitleController.text,
-      };
-
-      var response = await http.post(
-        Uri.parse(addhive),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(regBody),
-      );
-
-      var jsonResponse = jsonDecode(response.body);
-      print(jsonResponse['status']);
-      if (jsonResponse['status']) {
-        hiveTitleController.clear();
-        Navigator.pop(context);
-        getHiveList(userId);
-      } else {
-        print("Something went wrong");
-      }
-    }
+  @override
+  void dispose() {
+    hiveTitleController.dispose();
+    super.dispose();
   }
 
-  Future<void> getHiveList(String userId) async {
+  Future<void> _loadHives() async {
+    if (!mounted) return;
+
+    setState(() => isLoading = true);
     try {
-      // Include userId as a query parameter in the URL
-      final String endpoint = '$getHiVeList?userId=$userId';
-      
-      print("Fetching hives for userId: $userId");
-      print("Calling API: $endpoint");
-      
-      var response = await http.get(
-        Uri.parse(endpoint),
+      final response = await http.get(
+        Uri.parse('$getHiVeList?userId=$userId'),
         headers: {"Content-Type": "application/json"},
-      );
-      
-      print("Status code: ${response.statusCode}");
-      print("Response body: ${response.body.substring(0, min(100, response.body.length))}");
-      
-      if (response.statusCode == 200) {
-        var jsonResponse = jsonDecode(response.body);
-        setState(() {
-          items = jsonResponse['success'] ?? [];
-        });
-      } else {
-        print("Server error: ${response.statusCode}");
-        print("Response body: ${response.body}");
-        setState(() {
-          items = [];
-        });
-      }
-    } catch (e) {
-      print("Error fetching hive list: $e");
-      setState(() {
-        items = [];
-      });
-    }
-  }
-  
-  void deleteItem(String id) async {
-    try {
-      var regBody = {
-        "id": id,
-      };
-
-      var response = await http.post(
-        Uri.parse(deleteHive),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(regBody),
-      );
-
-      print("Status code: ${response.statusCode}");
-      print("Response body: ${response.body}");
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
-        var jsonResponse = jsonDecode(response.body);
-        if (jsonResponse['status']) {
-          print("Hive deleted successfully");
-          getHiveList(userId); // Refresh the list
-        } else {
-          print("Failed to delete hive: ${jsonResponse['message']}");
+        final jsonResponse = jsonDecode(response.body);
+        if (mounted) {
+          setState(() {
+            items = jsonResponse['success'] ?? [];
+            isLoading = false;
+          });
         }
       } else {
-        print("Server error: ${response.statusCode}");
+        _showErrorSnackbar('Failed to load hives: ${response.statusCode}');
+      }
+    } on TimeoutException {
+      _showErrorSnackbar('Request timed out');
+    } on PlatformException catch (e) {
+      _showErrorSnackbar('Platform error: ${e.message}');
+    } catch (e) {
+      _showErrorSnackbar('Unexpected error: ${e.toString()}');
+    } finally {
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
+    }
+  }
+
+  Future<void> addHive() async {
+    if (hiveTitleController.text.isEmpty) {
+      _showErrorSnackbar('Please enter a hive title');
+      return;
+    }
+
+    if (!mounted) return;
+
+    setState(() => isLoading = true);
+    try {
+      final response = await http.post(
+        Uri.parse(addhive),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "userId": userId,
+          "title": hiveTitleController.text,
+        }),
+      ).timeout(const Duration(seconds: 15));
+
+      final jsonResponse = jsonDecode(response.body);
+      if (response.statusCode == 200 && jsonResponse['status'] == true) {
+        hiveTitleController.clear();
+        if (mounted) Navigator.pop(context);
+        await _loadHives();
+      } else {
+        _showErrorSnackbar(jsonResponse['message'] ?? 'Failed to add hive');
       }
     } catch (e) {
-      print("Exception: $e");
+      _showErrorSnackbar('Error: ${e.toString()}');
+    } finally {
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _confirmDelete(String id, String title) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Delete'),
+        content: Text('Are you sure you want to delete "$title"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _deleteHive(id);
+    }
+  }
+
+  Future<void> _deleteHive(String id) async {
+    if (!mounted) return;
+
+    setState(() => isDeleting = true);
+    try {
+      final response = await http.post(
+        Uri.parse(deleteHive),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"id": id}),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final jsonResponse = jsonDecode(response.body);
+        if (jsonResponse['status'] == true) {
+          _showSuccessSnackbar('Hive deleted successfully');
+          await _loadHives();
+        } else {
+          _showErrorSnackbar(jsonResponse['message'] ?? 'Failed to delete hive');
+        }
+      } else {
+        _showErrorSnackbar('Server error: ${response.statusCode}');
+      }
+    } catch (e) {
+      _showErrorSnackbar('Error: ${e.toString()}');
+    } finally {
+      if (mounted) {
+        setState(() => isDeleting = false);
+      }
+    }
+  }
+
+  void _showErrorSnackbar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  void _showSuccessSnackbar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  Future<void> _scanQRCode() async {
+    try {
+      final scannedData = await Navigator.push<String>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => Scaffold(
+            appBar: AppBar(
+              title: const Text('Scan Hive QR Code'),
+              backgroundColor: Colors.amber,
+            ),
+            body: MobileScanner(
+              controller: MobileScannerController(
+                facing: CameraFacing.back,
+                torchEnabled: false,
+              ),
+              onDetect: (capture) {
+                final barcodes = capture.barcodes;
+                if (barcodes.isNotEmpty && mounted) {
+                  Navigator.pop(context, barcodes.first.rawValue);
+                }
+              },
+            ),
+          ),
+        ),
+      );
+
+      if (scannedData != null && mounted) {
+        _processScannedQR(scannedData);
+      }
+    } on PlatformException catch (e) {
+      _showErrorSnackbar('Camera permission denied: ${e.message}');
+    } catch (e) {
+      _showErrorSnackbar('Failed to scan QR code: ${e.toString()}');
+    }
+  }
+
+  void _processScannedQR(String data) {
+    if (data.startsWith('RUCHE_')) {
+      final hiveId = data.substring(5);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HiveDetailScreen(
+            hiveId: hiveId,
+            hiveTitle: 'Scanned Hive',
+            token: widget.token,
+          ),
+        ),
+      );
+    } else {
+      _showErrorSnackbar('Invalid QR code format');
+    }
+  }
+
+  Future<void> _showAddHiveDialog() async {
+    return showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text(
+            'Add Hive',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.amber,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: hiveTitleController,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Colors.white,
+                  hintText: "Enter a title",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: isLoading ? null : addHive,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.amber,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                child: isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text(
+                        "Add",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showLogoutConfirmation() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout Confirmation'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Logout',
+              style: TextStyle(color: Colors.amber),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => Acceuil()),
+      );
     }
   }
 
@@ -142,13 +342,20 @@ class _DashboardState extends State<Dashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddHiveDialog,
+        backgroundColor: const Color.fromARGB(255, 255, 216, 97),
+        child: const Icon(Icons.add, color: Colors.white),
+        tooltip: 'Add Hive',
+      ),
+      floatingActionButtonLocation: const CustomFloatingActionButtonLocation(offsetY: 90.0),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: EdgeInsets.only(top: 60.0, left: 30.0, right: 30.0, bottom: 30.0),
-            decoration: BoxDecoration(
-              color: const Color.fromARGB(255, 255, 255, 255),
+            padding: const EdgeInsets.only(top: 60.0, left: 30.0, right: 30.0, bottom: 30.0),
+            decoration: const BoxDecoration(
+              color: Colors.white,
               borderRadius: BorderRadius.only(
                 bottomLeft: Radius.circular(30),
                 bottomRight: Radius.circular(30),
@@ -164,8 +371,8 @@ class _DashboardState extends State<Dashboard> {
                     height: 100,
                   ),
                 ),
-                SizedBox(height: 10),
-                Text(
+                const SizedBox(height: 10),
+                const Text(
                   'DASHBOARD:',
                   style: TextStyle(
                     fontSize: 24,
@@ -173,91 +380,100 @@ class _DashboardState extends State<Dashboard> {
                     color: Colors.amber,
                   ),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
               ],
             ),
           ),
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(30),
-                  topRight: Radius.circular(30),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    blurRadius: 20,
-                    spreadRadius: 5,
-                    color: Colors.grey.withOpacity(0.2),
+            child: RefreshIndicator(
+              key: _refreshIndicatorKey,
+              onRefresh: _loadHives,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(30),
+                    topRight: Radius.circular(30),
                   ),
-                ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: items == null
-                    ? Center(child: CircularProgressIndicator()) // Show loading indicator
-                    : items!.isEmpty
-                        ? Center(child: Text("No Hives found."))
-                        : ListView.builder(
-                            itemCount: items!.length,
-                            itemBuilder: (context, int index) {
-                              return Slidable(
-                                key: const ValueKey(0),
-                                endActionPane: ActionPane(
-                                  motion: ScrollMotion(),
-                                  dismissible: DismissiblePane(onDismissed: () {}),
-                                  children: [
-                                    SlidableAction(
-                                      backgroundColor: Color(0xFFFE4A49),
-                                      foregroundColor: Colors.white,
-                                      icon: Icons.delete,
-                                      label: 'Delete',
-                                      onPressed: (BuildContext context) {
-                                        print('${items![index]['_id']}');
-                                        deleteItem('${items![index]['_id']}');
-                                      },
-                                    ),
-                                  ],
-                                ),
-                                child: Card(
-                                  elevation: 2,
-                                  margin: EdgeInsets.symmetric(vertical: 8),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: ListTile(
-                                    onTap: () {
-                                      // Navigate to HiveDetails page when tapped
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => HiveDetailScreen(
-                                            hiveId: items![index]['_id'],
-                                            hiveTitle: items![index]['title'],
-                                            token: widget.token,
+                  boxShadow: [
+                    BoxShadow(
+                      blurRadius: 20,
+                      spreadRadius: 5,
+                      color: Colors.grey.withOpacity(0.2),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: isLoading && (items == null || items!.isEmpty)
+                      ? const Center(child: CircularProgressIndicator())
+                      : items == null
+                          ? const Center(child: Text("No Hives found."))
+                          : items!.isEmpty
+                              ? const Center(child: Text("No Hives found. Add a new hive to get started!"))
+                              : ListView.builder(
+                                  itemCount: items!.length,
+                                  itemBuilder: (context, index) {
+                                    final item = items![index];
+                                    if (item == null || item['_id'] == null) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    return Slidable(
+                                      key: ValueKey(item['_id']),
+                                      endActionPane: ActionPane(
+                                        motion: const ScrollMotion(),
+                                        children: [
+                                          SlidableAction(
+                                            backgroundColor: Colors.red,
+                                            foregroundColor: Colors.white,
+                                            icon: Icons.delete,
+                                            label: 'Delete',
+                                            onPressed: (_) => _confirmDelete(
+                                              item['_id'],
+                                              item['title'] ?? 'Untitled Hive',
+                                            ),
                                           ),
-                                        ),
-                                      );
-                                    },
-                                    title: Text('${items![index]['title']}',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.black,
+                                        ],
                                       ),
-                                    ),
-                                    trailing: Icon(Icons.arrow_forward, color: Colors.grey),
-                                  ),
+                                      child: Card(
+                                        elevation: 2,
+                                        margin: const EdgeInsets.symmetric(vertical: 8),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: ListTile(
+                                          onTap: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) => HiveDetailScreen(
+                                                  hiveId: item['_id'],
+                                                  hiveTitle: item['title'] ?? 'Untitled Hive',
+                                                  token: widget.token,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          title: Text(
+                                            item['title'] ?? 'Untitled Hive',
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.black,
+                                            ),
+                                          ),
+                                          trailing: const Icon(Icons.arrow_forward, color: Colors.grey),
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
-                              );
-                            },
-                          ),
+                ),
               ),
             ),
           ),
           Container(
-            padding: EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
@@ -267,7 +483,7 @@ class _DashboardState extends State<Dashboard> {
                   color: Colors.grey.withOpacity(0.2),
                 ),
               ],
-              borderRadius: BorderRadius.only(
+              borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(30),
                 topRight: Radius.circular(30),
               ),
@@ -276,28 +492,32 @@ class _DashboardState extends State<Dashboard> {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 IconButton(
-                  onPressed: () {
-                    // Add functionality for Home
-                  },
-                  icon: Icon(
+                  onPressed: () {},
+                  icon: const Icon(
                     Icons.home,
                     size: 30,
                     color: Colors.amber,
                   ),
                 ),
                 IconButton(
-                  onPressed: () {
-                    // Add functionality for Alerts
-                  },
-                  icon: Icon(
+                  onPressed: _scanQRCode,
+                  icon: const Icon(
+                    Icons.qr_code_scanner,
+                    size: 30,
+                    color: Colors.amber,
+                  ),
+                ),
+                IconButton(
+                  onPressed: () {},
+                  icon: const Icon(
                     Icons.notifications,
                     size: 30,
                     color: Colors.amber,
                   ),
                 ),
                 IconButton(
-                  onPressed: () => _displayTextInputDialogLogOut(context),
-                  icon: Icon(
+                  onPressed: _showLogoutConfirmation,
+                  icon: const Icon(
                     Icons.logout,
                     size: 30,
                     color: Colors.amber,
@@ -308,119 +528,6 @@ class _DashboardState extends State<Dashboard> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _displayTextInputDialog(context),
-        backgroundColor: const Color.fromARGB(255, 255, 216, 97),
-        child: Icon(Icons.add, color: Colors.white),
-        tooltip: 'Add Hive',
-      ),
-      floatingActionButtonLocation: CustomFloatingActionButtonLocation(offsetY: 90.0),
     );
   }
-
-  Future<void> _displayTextInputDialog(BuildContext context) async {
-    return showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(
-            'Add Hive',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.amber,
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: hiveTitleController,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: const Color.fromARGB(255, 255, 255, 255),
-                  hintText: "Enter a title",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () {
-                  addHive();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color.fromARGB(255, 255, 216, 97),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Text(
-                  "Add",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    ).then((_) {
-      hiveTitleController.clear();
-    });
-  }
-
-  Future<void> _displayTextInputDialogLogOut(BuildContext context) async {
-    return showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(
-            'ARE YOU SURE ?',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.amber,
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => Acceuil()),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color.fromARGB(255, 255, 216, 97),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Text(
-                  "LOG OUT",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    ).then((_) {
-      hiveTitleController.clear();
-    });
-  }
 }
-
