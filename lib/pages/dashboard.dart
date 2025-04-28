@@ -6,6 +6,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:front/config.dart';
 import 'package:front/pages/acceuil.dart';
 import 'package:front/pages/hive_details_screen.dart';
+import 'package:front/pages/weather_screen.dart';
 import 'package:http/http.dart' as http;
 import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -508,7 +509,15 @@ class _DashboardState extends State<Dashboard> {
                   ),
                 ),
                 IconButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WeatherScreen(), // Navigate to WeatherScreen
+      ),
+    );
+
+                  },
                   icon: const Icon(
                     Icons.notifications,
                     size: 30,
