@@ -501,6 +501,14 @@ class _DashboardState extends State<Dashboard> {
                   ),
                 ),
                 IconButton(
+                  onPressed: () {},
+                  icon: const Icon(
+                    Icons.notifications,
+                    size: 30,
+                    color: Colors.amber,
+                  ),
+                ),
+                IconButton(
                   onPressed: _scanQRCode,
                   icon: const Icon(
                     Icons.qr_code_scanner,
@@ -519,7 +527,7 @@ class _DashboardState extends State<Dashboard> {
 
                   },
                   icon: const Icon(
-                    Icons.notifications,
+                    Icons.sunny_snowing,
                     size: 30,
                     color: Colors.amber,
                   ),
